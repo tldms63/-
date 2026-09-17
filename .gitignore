@@ -1,0 +1,17 @@
+# 환경 변수 / 비밀키
+.env
+
+# SQLite DB
+*.db
+olympics.db
+
+# 대용량 영상 자산 (경로 구조만 유지)
+backend/static/videos/*.mp4
+!backend/static/videos/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
