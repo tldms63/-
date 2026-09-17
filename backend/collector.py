@@ -3,8 +3,16 @@
 
 서울올림픽기념국민체육진흥공단_올림픽자료실 사진동영상 정보 API
 (공공데이터포털 SRVC_OD_API_PHOTO)를 호출해, TARGET_SPORTS에 지정한 종목별로
-서로 다른 경기 PER_SPORT건씩(현재 5개 종목 x 3건 = 15건)을 골라 로컬 SQLite DB
-(olympics.db)에 저장한다.
+SPORT_KEYWORDS(선수명/세부종목명)에 가장 많이 매칭되는 경기 PER_SPORT건씩
+(현재 5개 종목 x 3건 = 15건)을 골라 로컬 SQLite DB(olympics.db)에 저장한다.
+
+선별 방식
+---------
+전체 페이지(최대 MAX_PAGES x PAGE_SIZE건)를 훑으면서 종목별로 후보를 모으고,
+각 항목에 대해 SPORT_KEYWORDS(예: 김광선, 박시헌, 전병관 등 실제 선수명·핵심
+세부종목명)와 BONUS_KEYWORDS(결승/금메달/시상식 등)가 제목·요약에 등장하는
+개수로 점수를 매긴 뒤, 점수가 높은 순으로 종목당 PER_SPORT건을 뽑는다.
+(score_item 참고) 키워드에 전혀 걸리지 않는 항목은 후보에서 제외한다.
 
 호출 전략
 ---------
@@ -38,10 +46,22 @@ ENDPOINTS = ["/todz_api_movie_i", "/TODZ_API_PHOTO_I"]
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "olympics.db")
 
 # 웹에 노출할 5개 종목 x 종목별 3건 = 15건만 선별한다.
-TARGET_SPORTS = ["복싱", "체조", "태권도", "역도", "펜싱"]
+TARGET_SPORTS = ["복싱", "체조", "태권도", "펜싱", "역도"]
 PER_SPORT = 3
 PAGE_SIZE = 1000  # 이 API는 numOfRows를 1000건까지만 허용한다.
 MAX_PAGES = 10  # 전체 데이터(약 9,752건)를 모두 훑어도 10페이지면 충분하다.
+
+# 종목별로 우선 찾는 실제 선수명/핵심 세부종목명 (실제 데이터에서 대조 확인됨).
+# 하나 매칭될 때마다 10점을 준다.
+SPORT_KEYWORDS: dict[str, list[str]] = {
+    "복싱": ["김광선", "박시헌"],
+    "체조": ["박종훈", "임혜진", "도마"],
+    "태권도": ["하태경"],
+    "펜싱": ["에페", "플뢰레", "사브르"],
+    "역도": ["전병관"],
+}
+# 종목 불문 가산점 키워드 (결승/시상식 장면을 우선하기 위함). 하나 매칭될 때마다 3점.
+BONUS_KEYWORDS = ["결승", "금메달", "시상식"]
 
 # 실제 응답 필드명(동영상 API 기준: title_kor_nm, game_kor_nm, fix_ymd, sc_txt_cn 등)을
 # 최우선으로 탐색하고, 사진 API 등 다른 엔드포인트로 폴백될 경우를 대비해 자주 쓰이는
@@ -68,6 +88,7 @@ ATHLETE_NAME_MAP: list[tuple[re.Pattern, str]] = [
     (re.compile(r"Liao,?\s*Chin\s*Ming"), "Liao Chin-ming"),      # 대만(중화타이베이), 역도 100kg급
     (re.compile(r"Langthaler,?\s*F\.?"), "Franz Langthaler"),     # 오스트리아, 역도 100kg급
     (re.compile(r"Murillo,?\s*T\.?"), "Tolentino Murillo"),       # 콜롬비아, 역도 60kg급
+    (re.compile(r"Suleymano\.?"), "Naim Süleymanoğlu"),           # 터키, 역도 60kg급 금메달(전설적 선수)
 ]
 
 
@@ -240,6 +261,33 @@ def pick(item: dict, keys: list[str]) -> str:
     return ""
 
 
+def fix_known_date_typo(date_str: str) -> str:
+    """서울올림픽(1988)인데 원본 fix_ymd가 '1998-'로 잘못 기재된 레코드가 실제로
+    존재함을 확인했다 (예: 복싱 라이트미들급 시상식). 연도만 보정하고 나머지는 그대로 둔다."""
+    if date_str.startswith("1998-"):
+        return "1988-" + date_str[5:]
+    return date_str
+
+
+def score_item(item: dict, sport: str) -> int:
+    """SPORT_KEYWORDS/BONUS_KEYWORDS 매칭 개수로 항목의 우선순위 점수를 매긴다."""
+    haystack = " ".join(
+        [
+            str(item.get("title_kor_nm") or ""),
+            str(item.get("sc_title_kor_nm") or ""),
+            str(item.get("sc_txt_cn") or ""),
+        ]
+    )
+    score = 0
+    for kw in SPORT_KEYWORDS.get(sport, []):
+        if kw in haystack:
+            score += 10
+    for kw in BONUS_KEYWORDS:
+        if kw in haystack:
+            score += 3
+    return score
+
+
 def build_row(item: dict) -> tuple[str, str, str, str, str]:
     """API 원본 item을 (title, sport, event_date, summary, raw_json)으로 변환한다."""
     sport = pick(item, SPORT_KEYS)
@@ -252,7 +300,7 @@ def build_row(item: dict) -> tuple[str, str, str, str, str]:
         title = f"{title} - {scene}"
     title = expand_athlete_names(title)
 
-    event_date = pick(item, DATE_KEYS)
+    event_date = fix_known_date_typo(pick(item, DATE_KEYS))
     summary = expand_athlete_names(pick(item, SUMMARY_KEYS))
     # 참가국(country_kor_nm), 영상 길이(mv_time_len), 원본 링크(item_url)는
     # summary에 합치지 않고 raw_json에만 보존한다. API가 이를 별도 필드로 풀어서
@@ -262,34 +310,44 @@ def build_row(item: dict) -> tuple[str, str, str, str, str]:
 
 
 def setup_db(conn: sqlite3.Connection) -> None:
+    # ID를 1부터 다시 깔끔하게 매기기 위해 테이블 자체를 새로 만든다
+    # (DELETE만으로는 AUTOINCREMENT 카운터가 이전 최대값에서 이어짐).
+    conn.execute("DROP TABLE IF EXISTS olympics")
     conn.execute(
         """
-        CREATE TABLE IF NOT EXISTS olympics (
+        CREATE TABLE olympics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT,
             sport TEXT,
             event_date TEXT,
             summary TEXT,
+            video_url TEXT,
             raw_json TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
         """
     )
-    # 재실행 시 mock/이전 데이터가 남지 않도록 매번 완전히 비우고 채운다.
-    conn.execute("DELETE FROM olympics")
     conn.commit()
 
 
 def collect_from_endpoint(endpoint: str, service_key_encoded: str) -> list[dict]:
-    """TARGET_SPORTS 각 종목에서 서로 다른 경기(제목 기준) PER_SPORT건씩 골라 모은다."""
-    picked: dict[str, list[dict]] = {sport: [] for sport in TARGET_SPORTS}
-    seen_titles: dict[str, set] = {sport: set() for sport in TARGET_SPORTS}
+    """전체 페이지를 훑어 종목별 후보를 모으고, score_item 점수가 높은 순으로
+    종목당 PER_SPORT건씩 골라 모은다.
 
-    def is_satisfied() -> bool:
-        return all(len(picked[sport]) >= PER_SPORT for sport in TARGET_SPORTS)
+    같은 경기의 예선 조/장면이 title_kor_nm을 공유하는 경우가 많아(예: 역도
+    "52KG급 (4)"의 여러 시도 장면, 체조 "개인 종목별 결승 (4)"의 서로 다른 선수/
+    라운드 장면), 그룹별로 가장 점수가 높은 장면 하나만 남긴다 - "먼저 본 것"이
+    아니라 "그룹 내 최고 점수"를 기준으로 고른다.
+
+    그룹 키는 title_kor_nm 단독이 아니라 title_kor_nm + sc_title_kor_nm(장면 제목)의
+    조합을 쓴다. title_kor_nm만 쓰면 "박종훈 1라운드(9.950점)"와 "박종훈 2라운드
+    (10.000 만점)"처럼 서로 다른 라운드/선수의 장면이 같은 그룹으로 묶여 하나가
+    통째로 버려지는 문제가 있었다.
+    """
+    best_by_group: dict[str, dict[str, tuple[int, dict]]] = {sport: {} for sport in TARGET_SPORTS}
 
     page_no = 1
-    while page_no <= MAX_PAGES and not is_satisfied():
+    while page_no <= MAX_PAGES:
         data = fetch_page(endpoint, service_key_encoded, page_no, PAGE_SIZE)
         items, total_count = extract_items(data)
         if not items:
@@ -297,33 +355,33 @@ def collect_from_endpoint(endpoint: str, service_key_encoded: str) -> list[dict]
 
         for item in items:
             sport = pick(item, SPORT_KEYS)
-            if sport not in picked or len(picked[sport]) >= PER_SPORT:
+            if sport not in best_by_group:
                 continue
-            # 같은 경기의 예선 조/장면 반복이 아니라 서로 다른 경기를 고르기 위해
-            # 경기명(title) 기준으로 중복을 거른다.
-            title_key = pick(item, TITLE_KEYS)
-            if title_key in seen_titles[sport]:
-                continue
-            seen_titles[sport].add(title_key)
-            picked[sport].append(item)
+            score = score_item(item, sport)
+            if score <= 0:
+                continue  # 키워드에 전혀 매칭되지 않으면 후보에서 제외
+
+            group_key = (pick(item, TITLE_KEYS), str(item.get("sc_title_kor_nm") or ""))
+            current_best = best_by_group[sport].get(group_key)
+            if current_best is None or score > current_best[0]:
+                best_by_group[sport][group_key] = (score, item)
 
         if total_count is not None and page_no * PAGE_SIZE >= total_count:
             break
         page_no += 1
         time.sleep(0.3)
 
-    # 종목별 요청 개수만큼 못 채웠으면(중복 제거 탓) 어떤 항목이라도 채워 넣는다.
-    for sport in TARGET_SPORTS:
-        if len(picked[sport]) < PER_SPORT:
-            print(
-                f"경고: '{sport}' 종목에서 서로 다른 경기를 {PER_SPORT}건 채우지 못하고 "
-                f"{len(picked[sport])}건만 수집했습니다.",
-                file=sys.stderr,
-            )
-
     collected: list[dict] = []
     for sport in TARGET_SPORTS:
-        collected.extend(picked[sport][:PER_SPORT])
+        ranked = sorted(best_by_group[sport].values(), key=lambda pair: pair[0], reverse=True)
+        top = [item for _score, item in ranked[:PER_SPORT]]
+        if len(top) < PER_SPORT:
+            print(
+                f"경고: '{sport}' 종목에서 키워드 매치 후보를 {PER_SPORT}건 채우지 못하고 "
+                f"{len(top)}건만 찾았습니다.",
+                file=sys.stderr,
+            )
+        collected.extend(top)
     return collected
 
 
@@ -369,9 +427,13 @@ def collect() -> int:
     )
     conn.commit()
 
+    # id가 1부터 순서대로 부여된 뒤에야 video_url(/static/videos/{id}.mp4)을 채울 수 있다.
+    conn.execute("UPDATE olympics SET video_url = '/static/videos/' || id || '.mp4'")
+    conn.commit()
+
     count = conn.execute("SELECT COUNT(*) FROM olympics").fetchone()[0]
     all_rows = conn.execute(
-        "SELECT title, sport, event_date FROM olympics ORDER BY id"
+        "SELECT id, title, sport, event_date, summary FROM olympics ORDER BY id"
     ).fetchall()
     conn.close()
 
@@ -384,9 +446,10 @@ def collect() -> int:
         )
 
     print(f"olympics.db에 총 {count}건의 메타데이터를 저장했습니다.")
-    print("종목별 선별 결과:")
-    for title, sport, event_date in all_rows:
-        print(f"  [{sport}] {title} ({event_date})")
+    print("=== 선별된 경기 목록 [ID / 종목 / 제목 / 상세 설명] ===")
+    for row_id, title, sport, event_date, summary in all_rows:
+        print(f"[{row_id}] {sport} | {title} ({event_date})")
+        print(f"    {summary}")
 
     return count
 

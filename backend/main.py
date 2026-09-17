@@ -80,7 +80,7 @@ def _with_raw_fields(row: sqlite3.Row) -> dict:
 @app.get("/api/olympics/search")
 def search_olympics(keyword: Optional[str] = None, sport: Optional[str] = None) -> list[dict]:
     """title/summary를 keyword로, sport를 sport로 부분 일치 검색한다 (둘 다 선택값, AND 결합)."""
-    query = "SELECT id, title, sport, event_date, summary, raw_json FROM olympics WHERE 1=1"
+    query = "SELECT id, title, sport, event_date, summary, video_url, raw_json FROM olympics WHERE 1=1"
     params: list[str] = []
 
     if keyword:
