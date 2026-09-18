@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "olympics.db")
+DB_PATH = os.path.join(BASE_DIR, "data_pipeline", "olympics.db")
 POSES_DIR = os.path.join(BASE_DIR, "static", "poses")
 
 app = FastAPI(title="Olympics Archive Search API")

@@ -44,10 +44,10 @@ from mediapipe.tasks.python.vision import (
     RunningMode,
 )
 
-BASE_DIR = Path(__file__).resolve().parent
-MODEL_PATH = BASE_DIR / "models" / "pose_landmarker_lite.task"
-VIDEOS_DIR = BASE_DIR / "static" / "videos"
-POSES_DIR = BASE_DIR / "static" / "poses"
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+MODEL_PATH = BACKEND_DIR / "models" / "pose_landmarker_lite.task"
+VIDEOS_DIR = BACKEND_DIR / "static" / "videos"
+POSES_DIR = BACKEND_DIR / "static" / "poses"
 
 NUM_LANDMARKS = 33
 MODEL_DOWNLOAD_URL = (
