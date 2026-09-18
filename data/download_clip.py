@@ -36,7 +36,8 @@ import ffmpeg
 import yt_dlp
 from yt_dlp.utils import download_range_func
 
-BACKEND_DIR = Path(__file__).resolve().parent.parent
+ROOT_DIR = Path(__file__).resolve().parent.parent
+BACKEND_DIR = ROOT_DIR / "backend"
 VIDEOS_DIR = BACKEND_DIR / "static" / "videos"
 
 # 시작/종료 구간 앞뒤로 이만큼(초) 더 받아둔다. yt-dlp가 키프레임 경계에서 자르기

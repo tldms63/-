@@ -43,7 +43,9 @@ from dotenv import load_dotenv
 
 BASE_URL = "https://apis.data.go.kr/B551014/SRVC_OD_API_PHOTO"
 ENDPOINTS = ["/todz_api_movie_i", "/TODZ_API_PHOTO_I"]
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "olympics.db")
+ENV_PATH = os.path.join(ROOT_DIR, "backend", ".env")
 
 # 웹에 노출할 5개 종목 x 종목별 3건 = 15건만 선별한다.
 TARGET_SPORTS = ["복싱", "체조", "태권도", "펜싱", "역도"]
@@ -100,7 +102,7 @@ def expand_athlete_names(text: str) -> str:
 
 
 def get_service_key() -> str:
-    load_dotenv()
+    load_dotenv(dotenv_path=ENV_PATH)
     raw_key = os.getenv("PHOTO_API_KEY")
     if not raw_key:
         print(".env 파일에 PHOTO_API_KEY 가 설정되어 있지 않습니다.", file=sys.stderr)

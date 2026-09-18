@@ -1,9 +1,8 @@
 # 데이터 파이프라인 문서
 
-`backend/`에는 FastAPI 웹 서버(`main.py`)가, `backend/data_pipeline/`에는 그
-서버가 서빙할 데이터를 준비하는 **데이터 파이프라인 스크립트**가 들어있다.
-이 문서는 데이터 파이프라인 부분만 따로 정리한 것이다 (공모전 제출 / 포트폴리오
-정리용).
+프로젝트는 `frontend/`(화면), `backend/`(FastAPI 웹 서버, `main.py`),
+`data/`(데이터 수집/전처리 스크립트 + 데이터셋)로 영역이 분리되어 있다.
+이 문서는 `data/` 영역만 따로 정리한 것이다 (공모전 제출 / 포트폴리오 정리용).
 
 ## 전체 흐름
 
@@ -15,10 +14,10 @@
       ▼                            ▼                                ▼
 collector.py   ─────▶  olympics.db   download_clip.py  ─────▶  extract_pose.py
 (메타데이터 수집)      (id, title,    (구간 컷팅 +           (33개 관절
-                        sport, ...)    mp4 정규화)             키포인트 추출)
-                                          │                          │
+ [data/]                sport, ...)    mp4 정규화)             키포인트 추출)
+                        [data/]           │                          │
                                           ▼                          ▼
-                              static/videos/{id}.mp4       static/poses/{id}.json
+                       backend/static/videos/{id}.mp4  backend/static/poses/{id}.json
                                           │                          │
                                           └──────────┬───────────────┘
                                                       ▼
@@ -43,7 +42,7 @@ collector.py   ─────▶  olympics.db   download_clip.py  ────�
 - **출력**: `olympics.db`의 `olympics` 테이블 (`id, title, sport, event_date, summary,
   video_url, raw_json, created_at`). `video_url`은 `/static/videos/{id}.mp4`로
   미리 채워지지만, 실제 파일은 아직 없다 (2단계에서 생성됨).
-- **실행**: `python data_pipeline/collector.py` (backend/ 기준)
+- **실행**: `python data/collector.py` (프로젝트 루트 기준)
 - **비고**: 실행할 때마다 `olympics` 테이블을 `DROP`하고 새로 만든다 (재실행 시
   id가 1부터 다시 매겨짐). 실제 영상 재생 URL은 API가 제공하지 않으므로,
   `matches_for_youtube.md` / `selected_15_matches.md`를 참고해 사람이 직접
@@ -57,8 +56,8 @@ collector.py   ─────▶  olympics.db   download_clip.py  ────�
 - **처리 방식**: `yt-dlp`로 여유(±2초)를 두고 구간만 다운로드 →
   `ffmpeg-python`으로 정확한 구간으로 재트리밍 + 코덱 정규화 → 중간 파일 삭제.
 - **입력**: 유튜브 URL, 시작/종료 시각(초), (1단계에서 정해진) 경기 `id`.
-- **출력**: `static/videos/{id}.mp4`
-- **실행**: `python data_pipeline/download_clip.py <id> "<youtube_url>" <start_sec> <end_sec>` (backend/ 기준)
+- **출력**: `backend/static/videos/{id}.mp4`
+- **실행**: `python data/download_clip.py <id> "<youtube_url>" <start_sec> <end_sec>` (프로젝트 루트 기준)
 - **의존성**: 시스템에 `ffmpeg` 실행 파일 필요 (`--ffmpeg-path`로 직접 지정 가능).
 - **비고**: 저작권이 있는 방송 푸티지이므로 URL은 스크립트가 자동 검색하지 않고
   사용자가 직접 지정한 것만 처리한다.
@@ -72,14 +71,14 @@ collector.py   ─────▶  olympics.db   download_clip.py  ────�
 - **좌표 정규화**: `x, y`는 프레임 해상도에 대한 비율(0~1, 해상도 무관),
   `z`는 hip 기준 상대 깊이, `visibility`는 관절이 보이는지에 대한 신뢰도(0~1).
   별도 스케일링 없이 MediaPipe 원본 값을 그대로 저장한다.
-- **입력**: `static/videos/{id}.mp4`, `models/pose_landmarker_lite.task` (최초
-  1회 공식 URL에서 직접 다운로드해 두어야 하는 모델 파일).
-- **출력**: `static/poses/{id}.json`
+- **입력**: `backend/static/videos/{id}.mp4`, `backend/models/pose_landmarker_lite.task`
+  (최초 1회 공식 URL에서 직접 다운로드해 두어야 하는 모델 파일).
+- **출력**: `backend/static/poses/{id}.json`
   (`video_id, fps, width, height, frame_count, num_landmarks,
   detected_frame_count, coordinate_space, frames[]`)
-- **실행** (backend/ 기준):
-  - `python data_pipeline/extract_pose.py <id>` (단일 영상)
-  - `python data_pipeline/extract_pose.py --all` (`static/videos/` 안의 모든 mp4 일괄 처리)
+- **실행** (프로젝트 루트 기준):
+  - `python data/extract_pose.py <id>` (단일 영상)
+  - `python data/extract_pose.py --all` (`backend/static/videos/` 안의 모든 mp4 일괄 처리)
 
 ## 4. `olympics.db` — 데이터셋 저장소
 
@@ -98,40 +97,45 @@ collector.py   ─────▶  olympics.db   download_clip.py  ────�
 
 ---
 
-## 구조 리팩토링: `backend/data_pipeline/`로 분리 완료
+## 구조 리팩토링: 프로젝트 루트 `data/`로 분리 완료
 
 세 스크립트(`collector.py`, `download_clip.py`, `extract_pose.py`)는
 `main.py`가 **import하지 않는 독립 실행 CLI 스크립트**다 (`python collector.py`
 식으로 직접 실행되고, `main.py`에서 이들을 참조하는 코드는 없음). 따라서
 이동해도 Python import 경로(`sys.path`) 문제는 발생하지 않는다.
 
-데이터 수집/가공 관련 파일 전부(`collector.py`, `download_clip.py`,
-`extract_pose.py`, `matches_for_youtube.md`, `selected_15_matches.md`,
-`DATA_PIPELINE.md`, `olympics.db`)를 `backend/data_pipeline/`로 옮기고,
+처음에는 `backend/data_pipeline/`으로 한 차례 분리했다가, 프론트엔드/백엔드/
+데이터 3개 영역을 최상위에서 명확히 나누기 위해 최종적으로 프로젝트 루트의
+`data/`로 이동했다 (`frontend/`, `backend/`와 같은 레벨). `data/`에는
+`collector.py`, `download_clip.py`, `extract_pose.py`, `matches_for_youtube.md`,
+`selected_15_matches.md`, `DATA_PIPELINE.md`, `olympics.db`가 들어있다.
 `static/`, `models/`는 서버(`main.py`)가 직접 서빙/참조하는 대상이므로
-`backend/` 루트에 그대로 두었다.
+그대로 `backend/`에 둔다.
 
-이동에 맞춰 각 스크립트의 "내 위치 기준 상대경로" 계산을 아래처럼 보정했다.
+이동에 맞춰 각 스크립트의 "내 위치 기준 상대경로" 계산을 루트 기준으로
+다시 보정했다.
 
-| 파일 | 옮기기 전 | 옮긴 뒤 |
+| 파일 | 계산 | 비고 |
 |---|---|---|
-| `collector.py` | `os.path.dirname(os.path.abspath(__file__))/olympics.db` | 동일 (스크립트와 DB가 함께 이동했으므로 수정 불필요) |
-| `download_clip.py` | `BASE_DIR = Path(__file__).resolve().parent` | `BACKEND_DIR = Path(__file__).resolve().parent.parent` (한 단계 위 `backend/`를 가리키도록 보정) |
-| `extract_pose.py` | `BASE_DIR = Path(__file__).resolve().parent` | `BACKEND_DIR = Path(__file__).resolve().parent.parent` (`models/`, `static/videos/`, `static/poses/` 모두 `backend/` 기준으로 보정) |
-| `main.py` | `DB_PATH = BASE_DIR/olympics.db` | `DB_PATH = BASE_DIR/data_pipeline/olympics.db` (DB가 `data_pipeline/`로 이동했으므로 반영). `POSES_DIR`은 `static/`이 그대로 `backend/`에 남아 있어 수정 불필요. |
+| `collector.py` | `DB_PATH`: `os.path.dirname(os.path.abspath(__file__))/olympics.db` | 스크립트와 DB가 항상 `data/`에 함께 있으므로 수정 불필요 |
+| `download_clip.py` | `ROOT_DIR = Path(__file__).resolve().parent.parent` → `BACKEND_DIR = ROOT_DIR / "backend"` | `data/`가 루트로 옮겨졌으므로 `backend/`를 명시적으로 한 단계 더 내려가 지정 |
+| `extract_pose.py` | 위와 동일하게 `ROOT_DIR` → `BACKEND_DIR` 경유 | `models/`, `static/videos/`, `static/poses/` 모두 `backend/` 기준으로 정확히 찾음 |
+| `main.py` | `ROOT_DIR = os.path.dirname(BASE_DIR)` → `DB_PATH = ROOT_DIR/"data"/"olympics.db"` | DB가 `backend/` 밖 루트 `data/`로 나갔으므로 반영. `POSES_DIR`은 `static/`이 그대로 `backend/`에 남아 있어 수정 불필요 |
 
-`.env`(`PHOTO_API_KEY`)는 `python-dotenv`의 `load_dotenv()`가 호출부 파일
-위치부터 상위 폴더로 올라가며 `.env`를 찾으므로(`usecwd=False` 기본값),
-`collector.py`가 `backend/data_pipeline/`로 이동해도 `backend/.env`를 그대로
-잘 찾는다 (수정 불필요).
+`.env`(`PHOTO_API_KEY`)는 `backend/.env`에 있는데, `python-dotenv`의
+`load_dotenv()` 기본 탐색(`usecwd=False`)은 **호출한 파일 위치에서 상위로만**
+올라가며 찾는다. `collector.py`가 `backend/`의 형제 디렉터리인 `data/`로
+이동하면서 상위 탐색만으로는 더 이상 `backend/.env`를 찾을 수 없게 되어,
+`ENV_PATH = ROOT_DIR/"backend"/".env"`를 명시적으로 계산해
+`load_dotenv(dotenv_path=ENV_PATH)`로 고정 지정하도록 수정했다.
 
-실행 명령어는 아래처럼 바뀐다:
+실행 명령어는 아래처럼 바뀐다 (모두 프로젝트 루트 기준):
 
 ```
-python data_pipeline/collector.py
-python data_pipeline/download_clip.py <id> "<youtube_url>" <start_sec> <end_sec>
-python data_pipeline/extract_pose.py <id>
-python data_pipeline/extract_pose.py --all
+python data/collector.py
+python data/download_clip.py <id> "<youtube_url>" <start_sec> <end_sec>
+python data/extract_pose.py <id>
+python data/extract_pose.py --all
 ```
 
 (단, 현재 `main.py`에는 `/static/...` 경로를 서빙하는 `StaticFiles` 마운트가

@@ -44,7 +44,8 @@ from mediapipe.tasks.python.vision import (
     RunningMode,
 )
 
-BACKEND_DIR = Path(__file__).resolve().parent.parent
+ROOT_DIR = Path(__file__).resolve().parent.parent
+BACKEND_DIR = ROOT_DIR / "backend"
 MODEL_PATH = BACKEND_DIR / "models" / "pose_landmarker_lite.task"
 VIDEOS_DIR = BACKEND_DIR / "static" / "videos"
 POSES_DIR = BACKEND_DIR / "static" / "poses"

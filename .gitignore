@@ -3,7 +3,7 @@
 
 # SQLite DB
 *.db
-olympics.db
+data/olympics.db
 
 # 대용량 영상 자산 (경로 구조만 유지)
 backend/static/videos/*.mp4
