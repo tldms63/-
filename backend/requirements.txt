@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+requests
+python-dotenv
+opencv-python
+mediapipe
+yt-dlp
+ffmpeg-python
