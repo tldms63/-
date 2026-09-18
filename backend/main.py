@@ -7,6 +7,9 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
+
+from scoring import evaluate_pose
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "olympics.db")
@@ -119,3 +122,63 @@ def get_keypoints(match_id: int) -> FileResponse:
             ),
         )
     return FileResponse(pose_path, media_type="application/json")
+
+
+class LandmarkPoint(BaseModel):
+    x: float
+    y: float
+    z: float = 0.0
+    visibility: float = 1.0
+
+
+class PoseFrame(BaseModel):
+    """웹캠에서 한 프레임마다 뽑은 33개 관절 좌표. 포즈를 못 찾은 프레임은
+    landmarks를 생략하거나 null로 보내면 된다 (extract_pose.py 출력과 동일한 형식)."""
+
+    landmarks: Optional[list[LandmarkPoint]] = None
+
+
+class EvaluateRequest(BaseModel):
+    match_id: int
+    frames: list[PoseFrame]
+
+
+def _load_reference_frames(match_id: int) -> Optional[list]:
+    """extract_pose.py가 미리 뽑아 둔 기준 영상의 관절 좌표 시퀀스를 읽어온다.
+    아직 추출 전이라 파일이 없으면 None을 반환한다 (채점 로직이 알아서 대체 기준으로 처리)."""
+    pose_path = os.path.join(POSES_DIR, f"{match_id}.json")
+    if not os.path.isfile(pose_path):
+        return None
+    with open(pose_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return [frame.get("landmarks") for frame in data.get("frames", [])]
+
+
+@app.post("/api/olympics/evaluate")
+def evaluate_motion(payload: EvaluateRequest) -> dict:
+    """사용자가 따라 한 동작을 채점한다.
+
+    정밀한 선수 코칭이 아니라 학생들이 즐기는 체감형 아케이드 게임이 목표라,
+    화면에 감지되어 동작을 시도하기만 해도 최소 점수를 보장하고(scoring.BASE_SCORE),
+    종목별 핵심 관절 위주로 아주 너그럽게 채점한다. 자세한 채점 기준은 scoring.py 참고.
+    """
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT sport FROM olympics WHERE id = ?", (payload.match_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if row is None:
+        raise HTTPException(
+            status_code=404, detail=f"id={payload.match_id}에 대한 경기를 찾을 수 없습니다."
+        )
+
+    user_frames = [
+        [lm.model_dump() for lm in frame.landmarks] if frame.landmarks else None
+        for frame in payload.frames
+    ]
+    ref_frames = _load_reference_frames(payload.match_id)
+
+    return evaluate_pose(row["sport"], user_frames, ref_frames)
