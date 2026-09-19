@@ -11,6 +11,66 @@ body {
   padding: 16px;
 }
 
+/* 한글 도트(픽셀) 폰트 */
+@font-face {
+  font-family: "Galmuri11";
+  src: url("https://cdn.jsdelivr.net/npm/galmuri/dist/Galmuri11.woff2") format("woff2");
+  font-display: swap;
+}
+
+/* ── 인트로(시작) 화면 ── */
+#introScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background-color: #050507;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .035) 1px, transparent 1px);
+  background-size: 12px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+  cursor: pointer;
+  transition: opacity .7s ease;
+}
+#introScreen.introHidden {
+  opacity: 0;
+  pointer-events: none;
+}
+#introCanvas {
+  width: 600px;
+  max-width: 90vw;
+  height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+#introTitle {
+  font-family: "Galmuri11", monospace;
+  font-size: 46px;
+  color: #f2f2f2;
+  line-height: 1;
+  letter-spacing: 2px;
+  /* 8방향 검은 외곽선 + 아래 그림자(입체감) */
+  text-shadow:
+    -3px 0 0 #000, 3px 0 0 #000, 0 -3px 0 #000, 0 3px 0 #000,
+    -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000,
+    0 8px 0 rgba(0, 0, 0, .5);
+}
+#introHint {
+  font-family: "Press Start 2P", monospace;
+  color: #e6e6e6;
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-shadow: 2px 2px 0 #000;
+  animation: introBlink 1.1s steps(2, end) infinite;
+}
+@keyframes introBlink {
+  50% { opacity: 0; }
+}
+
 .wrap {
   max-width: 1200px;
   margin: 0 auto;
