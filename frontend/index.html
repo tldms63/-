@@ -4,9 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>88 리플레이</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=5" />
 </head>
 <body>
+  <!-- 인트로(시작) 화면: 픽셀 오륜기 + 88 리플레이 → 클릭/3.5초 뒤 사라짐 -->
+  <div id="introScreen">
+    <canvas id="introCanvas" width="240" height="120"></canvas>
+    <div id="introTitle">88 리플레이</div>
+    <div id="introHint">PRESS START</div>
+  </div>
+
   <div class="wrap">
     <!-- 상단 바 -->
     <header class="top-nav">
@@ -28,7 +38,7 @@
       <section class="panel panel-left">
         <div class="media-box">
           <video id="archiveVideo" playsinline muted preload="auto">
-            <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" type="video/mp4" />
+            <source src="athlete.mp4" type="video/mp4" />
           </video>
           <div id="videoNotice" class="overlay-notice">준비가 되면 '시작'을 눌러주세요</div>
         </div>
@@ -86,6 +96,40 @@
     </div>
   </div>
 
-  <script type="module" src="app.js"></script>
+  <!-- 인트로 그리기 + 사라짐 (app.js와 독립적으로 즉시 실행) -->
+  <script>
+    (function () {
+      var c = document.getElementById("introCanvas");
+      var x = c.getContext("2d");
+      var W = c.width;
+
+      // ── 오륜기: 크고 두껍게 + 검은 외곽선 + 그림자(입체적), 간격은 살짝 겹치게 ──
+      var R = 26;
+      function ring(cx, cy, col) {
+        x.strokeStyle = "rgba(0,0,0,0.55)"; x.lineWidth = 16; // 그림자
+        x.beginPath(); x.arc(cx + 3, cy + 4, R, 0, Math.PI * 2); x.stroke();
+        x.strokeStyle = "#000"; x.lineWidth = 16;             // 검은 외곽선
+        x.beginPath(); x.arc(cx, cy, R, 0, Math.PI * 2); x.stroke();
+        x.strokeStyle = col; x.lineWidth = 10;                // 색
+        x.beginPath(); x.arc(cx, cy, R, 0, Math.PI * 2); x.stroke();
+      }
+      ring(70, 56, "#0081C8");   // 파랑
+      ring(120, 56, "#e9e9e9");  // 검정(→밝은 회색, 검은 배경 대비)
+      ring(170, 56, "#EE334E");  // 빨강
+      ring(95, 82, "#FCB131");   // 노랑
+      ring(145, 82, "#00A651");  // 초록
+
+      // 제목은 실제 도트 폰트(#introTitle DOM)로 렌더 — 여기선 안 그림
+
+      // ── 사라짐: 오직 클릭할 때만 (자동으로 안 사라짐) ──
+      var intro = document.getElementById("introScreen");
+      intro.addEventListener("click", function () {
+        intro.classList.add("introHidden");
+        setTimeout(function () { intro.style.display = "none"; }, 700);
+      }, { once: true });
+    })();
+  </script>
+
+  <script type="module" src="app.js?v=10"></script>
 </body>
 </html>
